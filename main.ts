@@ -1,20 +1,31 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const source = join(here, "entry.txt");
-const text = readFileSync(source, "utf8");
-const trimmed = text.trim();
-if (trimmed.length < 1 || trimmed.length > 200) {
-  throw new Error(`entry must be 1-200 characters, got ${trimmed.length}`);
+// Validate the excuse line: non-empty, exactly one line, at most 200 chars.
+// The gate is one line of at most 200 characters, so enforce it here and
+// fail loudly instead of emitting an entry the judge would reject.
+function validateEntry(text) {
+  if (text.trim().length === 0) {
+    throw new Error("entry.txt must not be empty");
+  }
+  if (text.includes("\n") || text.includes("\r")) {
+    throw new Error("entry must be a single line");
+  }
+  if (text.length > 200) {
+    throw new Error(`entry must be at most 200 chars, got ${text.length}`);
+  }
+  return text;
 }
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+
+// Read the v2 excuse line from entry.txt next to this script and copy it
+// byte-for-byte to $MAKEFUN_OUTPUT_DIR/entry.txt. No deps, no network.
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const entry = validateEntry(readFileSync(join(scriptDir, "entry.txt"), "utf8"));
+
+const outDir = process.env.MAKEFUN_OUTPUT_DIR;
+if (!outDir) {
+  throw new Error("MAKEFUN_OUTPUT_DIR is not set");
+}
 mkdirSync(outDir, { recursive: true });
-const outPath = join(outDir, "entry.txt");
-writeFileSync(outPath, text, "utf8");
-// Post-write read-back: the grader runs the entry twice and expects
-// byte-identical output, so confirm what landed matches the source.
-if (readFileSync(outPath, "utf8") !== text) {
-  throw new Error("output does not match entry.txt");
-}
+writeFileSync(join(outDir, "entry.txt"), entry, "utf8");
